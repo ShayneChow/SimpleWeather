@@ -98,4 +98,14 @@
     return 44;
 }
 
+- (void)viewWillLayoutSubviews {
+    [super viewWillLayoutSubviews];
+    
+    CGRect bounds = self.view.bounds;
+    
+    self.backgroundImageView.frame = bounds;
+    self.blurredImageView.frame = bounds;
+    self.tableView.frame = bounds;
+}
+
 @end
