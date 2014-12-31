@@ -20,6 +20,10 @@
     self.view.backgroundColor = [UIColor purpleColor];
 }
 
+- (UIStatusBarStyle)preferredStatusBarStyle {
+    return UIStatusBarStyleLightContent;
+}//更改顶部状态栏样式:内容为白色
+
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
