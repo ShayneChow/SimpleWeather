@@ -8,6 +8,7 @@
 
 #import "WXController.h"
 #import <LBBlurredImage/UIImageView+LBBlurredImage.h>
+#import "WXManager.h"
 
 @interface WXController ()
 
@@ -50,6 +51,8 @@
     [self.view addSubview:self.tableView];
     
     [self layoutFrame];
+    
+    [[WXManager sharedManager] findCurrentLocation];
 }
 
 - (void)layoutFrame{
