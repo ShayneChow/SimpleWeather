@@ -16,6 +16,8 @@
 @property (nonatomic, strong) UIImageView *blurredImageView;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, assign) CGFloat screenHeight;
+@property (nonatomic, strong) NSDateFormatter *hourlyFormatter;
+@property (nonatomic, strong) NSDateFormatter *dailyFormatter;
 
 @end
 
@@ -127,6 +129,37 @@
     iconView.contentMode = UIViewContentModeScaleAspectFit;
     iconView.backgroundColor = [UIColor clearColor];
     [header addSubview:iconView];
+    
+    /************************************************************************************/
+    [[RACObserve([WXManager sharedManager], currentCondition)
+      deliverOn:RACScheduler.mainThreadScheduler]
+     subscribeNext:^(WXCondition *newCondition) {
+         temperatureLabel.text = [NSString stringWithFormat:@"%.0f°",newCondition.temperature.floatValue];
+         conditionsLabel.text = [newCondition.condition capitalizedString];
+         cityLabel.text = [newCondition.locationName capitalizedString];
+         
+         iconView.image = [UIImage imageNamed:[newCondition imageName]];
+     }];
+    
+    RAC(hiloLabel, text) = [[RACSignal combineLatest:@[
+                                                       RACObserve([WXManager sharedManager], currentCondition.tempHigh),
+                                                       RACObserve([WXManager sharedManager], currentCondition.tempLow)]
+                                              reduce:^(NSNumber *hi, NSNumber *low) {
+                                                  return [NSString  stringWithFormat:@"%.0f° / %.0f°",hi.floatValue,low.floatValue];
+                                              }]
+                            deliverOn:RACScheduler.mainThreadScheduler];
+    
+    [[RACObserve([WXManager sharedManager], hourlyForecast)
+      deliverOn:RACScheduler.mainThreadScheduler]
+     subscribeNext:^(NSArray *newForecast) {
+         [self.tableView reloadData];
+     }];
+    
+    [[RACObserve([WXManager sharedManager], dailyForecast)
+      deliverOn:RACScheduler.mainThreadScheduler]
+     subscribeNext:^(NSArray *newForecast) {
+         [self.tableView reloadData];
+     }];
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
@@ -147,8 +180,12 @@
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    // TODO: Return count of forecast
-    return 0;
+    // The first section is for the hourly forecast. Use the six latest hourly forecasts and add one more cell for the header.
+    if (section == 0) {
+        return MIN([[WXManager sharedManager].hourlyForecast count], 6) + 1;
+    }
+    //The next section is for daily forecasts. Use the six latest daily forecasts and add one more cell for the header.
+    return MIN([[WXManager sharedManager].dailyForecast count], 6) + 1;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -165,9 +202,60 @@
     cell.textLabel.textColor = [UIColor whiteColor];
     cell.detailTextLabel.textColor = [UIColor whiteColor];
     
-    // TODO: Setup the cell
+    if (indexPath.section == 0) {
+        // 1
+        if (indexPath.row == 0) {
+            [self configureHeaderCell:cell title:@"Hourly Forecast"];
+        }
+        else {
+            // 2
+            WXCondition *weather = [WXManager sharedManager].hourlyForecast[indexPath.row - 1];
+            [self configureHourlyCell:cell weather:weather];
+        }
+    }
+    else if (indexPath.section == 1) {
+        // 1
+        if (indexPath.row == 0) {
+            [self configureHeaderCell:cell title:@"Daily Forecast"];
+        }
+        else {
+            // 3
+            WXCondition *weather = [WXManager sharedManager].dailyForecast[indexPath.row - 1];
+            [self configureDailyCell:cell weather:weather];
+        }
+    }
     
     return cell;
+}
+
+// Configures and adds text to the cell used as the section header. You’ll reuse this for daily and hourly forecast sections.
+- (void)configureHeaderCell:(UITableViewCell *)cell title:(NSString *)title {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = title;
+    cell.detailTextLabel.text = @"";
+    cell.imageView.image = nil;
+}
+
+// Formats the cell for an hourly forecast.
+- (void)configureHourlyCell:(UITableViewCell *)cell weather:(WXCondition *)weather {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Light" size:18];
+    cell.detailTextLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = [self.hourlyFormatter stringFromDate:weather.date];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f°",weather.temperature.floatValue];
+    cell.imageView.image = [UIImage imageNamed:[weather imageName]];
+    cell.imageView.contentMode = UIViewContentModeScaleAspectFit;
+}
+
+// Formats the cell for a daily forecast.
+- (void)configureDailyCell:(UITableViewCell *)cell weather:(WXCondition *)weather {
+    cell.textLabel.font = [UIFont fontWithName:@"HelveticaNeue-Light" size:18];
+    cell.detailTextLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:18];
+    cell.textLabel.text = [self.dailyFormatter stringFromDate:weather.date];
+    cell.detailTextLabel.text = [NSString stringWithFormat:@"%.0f° / %.0f°",
+                                 weather.tempHigh.floatValue,
+                                 weather.tempLow.floatValue];
+    cell.imageView.image = [UIImage imageNamed:[weather imageName]];
+    cell.imageView.contentMode = UIViewContentModeScaleAspectFit;
 }
 
 #pragma mark - UITableViewDelegate
@@ -185,6 +273,18 @@
     self.backgroundImageView.frame = bounds;
     self.blurredImageView.frame = bounds;
     self.tableView.frame = bounds;
+}
+
+
+- (id)init {
+    if (self = [super init]) {
+        _hourlyFormatter = [[NSDateFormatter alloc] init];
+        _hourlyFormatter.dateFormat = @"h a";
+        
+        _dailyFormatter = [[NSDateFormatter alloc] init];
+        _dailyFormatter.dateFormat = @"EEEE";
+    }
+    return self;
 }
 
 @end
